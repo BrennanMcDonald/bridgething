@@ -46,23 +46,37 @@
     "desktop": {
       "name": "@bridgething/desktop-frontend",
       "dependencies": {
-        "@bridgething/catalog": "workspace:*",
         "@bridgething/companion-types": "workspace:*",
+        "@bridgething/console": "workspace:*",
         "@bridgething/ui": "workspace:*",
-        "@preact/signals": "^2.10.0",
         "@tauri-apps/api": "^2.9.0",
         "@tauri-apps/plugin-autostart": "^2.5.1",
         "@tauri-apps/plugin-clipboard-manager": "^2.3.2",
         "@tauri-apps/plugin-dialog": "^2.7.2",
         "@tauri-apps/plugin-updater": "^2.10.1",
         "preact": "^10.29.7",
-        "preact-iso": "^2.12.1",
       },
       "devDependencies": {
         "@preact/preset-vite": "^2.10.6",
         "@tailwindcss/vite": "^4.3.3",
         "@tauri-apps/cli": "^2.11.4",
         "tailwindcss": "^4.3.3",
+        "vite": "^8.2.1",
+      },
+    },
+    "headless": {
+      "name": "@bridgething/headless-frontend",
+      "dependencies": {
+        "@bridgething/companion-types": "workspace:*",
+        "@bridgething/console": "workspace:*",
+        "@bridgething/ui": "workspace:*",
+        "preact": "^10.29.7",
+      },
+      "devDependencies": {
+        "@preact/preset-vite": "^2.10.6",
+        "@tailwindcss/vite": "^4.3.3",
+        "tailwindcss": "^4.3.3",
+        "typescript": "^6.0.3",
         "vite": "^8.2.1",
       },
     },
@@ -165,6 +179,26 @@
       },
       "peerDependencies": {
         "typescript": "^6.0.3",
+      },
+    },
+    "packages/console": {
+      "name": "@bridgething/console",
+      "dependencies": {
+        "@bridgething/catalog": "workspace:*",
+        "@bridgething/companion-types": "workspace:*",
+        "@bridgething/ui": "workspace:*",
+        "@preact/signals": "^2.10.0",
+        "preact-iso": "^2.12.1",
+      },
+      "devDependencies": {
+        "@types/bun": "^1.3.14",
+        "preact": "^10.29.7",
+        "tailwindcss": "^4.3.3",
+        "typescript": "^6.0.3",
+      },
+      "peerDependencies": {
+        "preact": "^10.29.7",
+        "tailwindcss": "^4.3.3",
       },
     },
     "packages/create-bridgething": {
@@ -730,9 +764,13 @@
 
     "@bridgething/companion-types": ["@bridgething/companion-types@workspace:crates/companion"],
 
+    "@bridgething/console": ["@bridgething/console@workspace:packages/console"],
+
     "@bridgething/core-node": ["@bridgething/core-node@workspace:crates/delivery/napi"],
 
     "@bridgething/desktop-frontend": ["@bridgething/desktop-frontend@workspace:desktop"],
+
+    "@bridgething/headless-frontend": ["@bridgething/headless-frontend@workspace:headless"],
 
     "@bridgething/lib": ["@bridgething/lib@workspace:crates/lib"],
 
@@ -3734,6 +3772,8 @@
 
     "@bridgething/catalog/@types/bun": ["@types/bun@1.3.14", "", { "dependencies": { "bun-types": "1.3.14" } }, "sha512-h1hFqFVcvAvD9j9K7ZW7vd82aSA+rTdznZa+5bwvCwqSB1jmmfLcbIWhOLx1/+boy/xmjgCs/OMUL8hRJSmnPw=="],
 
+    "@bridgething/console/@types/bun": ["@types/bun@1.3.14", "", { "dependencies": { "bun-types": "1.3.14" } }, "sha512-h1hFqFVcvAvD9j9K7ZW7vd82aSA+rTdznZa+5bwvCwqSB1jmmfLcbIWhOLx1/+boy/xmjgCs/OMUL8hRJSmnPw=="],
+
     "@bridgething/mobile/tailwindcss": ["tailwindcss@3.4.19", "", { "dependencies": { "@alloc/quick-lru": "^5.2.0", "arg": "^5.0.2", "chokidar": "^3.6.0", "didyoumean": "^1.2.2", "dlv": "^1.1.3", "fast-glob": "^3.3.2", "glob-parent": "^6.0.2", "is-glob": "^4.0.3", "jiti": "^1.21.7", "lilconfig": "^3.1.3", "micromatch": "^4.0.8", "normalize-path": "^3.0.0", "object-hash": "^3.0.0", "picocolors": "^1.1.1", "postcss": "^8.4.47", "postcss-import": "^15.1.0", "postcss-js": "^4.0.1", "postcss-load-config": "^4.0.2 || ^5.0 || ^6.0", "postcss-nested": "^6.2.0", "postcss-selector-parser": "^6.1.2", "resolve": "^1.22.8", "sucrase": "^3.35.0" }, "bin": { "tailwind": "lib/cli.js", "tailwindcss": "lib/cli.js" } }, "sha512-3ofp+LL8E+pK/JuPLPggVAIaEuhvIz4qNcf3nA1Xn2o/7fb7s/TYpHhwGDv1ZU3PkBluUVaF8PyCHcm48cKLWQ=="],
 
     "@bridgething/overlay/vite": ["vite@7.3.3", "", { "dependencies": { "esbuild": "^0.27.0", "fdir": "^6.5.0", "picomatch": "^4.0.3", "postcss": "^8.5.6", "rollup": "^4.43.0", "tinyglobby": "^0.2.15" }, "optionalDependencies": { "fsevents": "~2.3.3" }, "peerDependencies": { "@types/node": "^20.19.0 || >=22.12.0", "jiti": ">=1.21.0", "less": "^4.0.0", "lightningcss": "^1.21.0", "sass": "^1.70.0", "sass-embedded": "^1.70.0", "stylus": ">=0.54.8", "sugarss": "^5.0.0", "terser": "^5.16.0", "tsx": "^4.8.1", "yaml": "^2.4.2" }, "optionalPeers": ["@types/node", "jiti", "less", "lightningcss", "sass", "sass-embedded", "stylus", "sugarss", "terser", "tsx", "yaml"], "bin": { "vite": "bin/vite.js" } }, "sha512-/4XH147Ui7OGTjg3HbdWe5arnZQSbfuRzdr9Ec7TQi5I7R+ir0Rlc9GIvD4v0XZurELqA035KVXJXpR61xhiTA=="],
@@ -4290,6 +4330,8 @@
 
     "@bridgething/catalog/@types/bun/bun-types": ["bun-types@1.3.14", "", { "dependencies": { "@types/node": "*" } }, "sha512-4N0ig0fEomHt5R0KCFWjovxow98rIoRwKolrYdCcknNwMekCXRnWEUvgu5soYV8QXtVsrUD8B95MBOZGPvr6KQ=="],
 
+    "@bridgething/console/@types/bun/bun-types": ["bun-types@1.3.14", "", { "dependencies": { "@types/node": "*" } }, "sha512-4N0ig0fEomHt5R0KCFWjovxow98rIoRwKolrYdCcknNwMekCXRnWEUvgu5soYV8QXtVsrUD8B95MBOZGPvr6KQ=="],
+
     "@bridgething/mobile/tailwindcss/postcss": ["postcss@8.5.14", "", { "dependencies": { "nanoid": "^3.3.11", "picocolors": "^1.1.1", "source-map-js": "^1.2.1" } }, "sha512-SoSL4+OSEtR99LHFZQiJLkT59C5B1amGO1NzTwj7TT1qCUgUO6hxOvzkOYxD+vMrXBM3XJIKzokoERdqQq/Zmg=="],
 
     "@bridgething/overlay/vite/picomatch": ["picomatch@4.0.4", "", {}, "sha512-QP88BAKvMam/3NxH6vj2o21R6MjxZUAd6nlwAS/pnGvN9IVLocLHxGYIzFhg6fUQ+5th6P4dv4eW9jX3DSIj7A=="],
@@ -4833,6 +4875,8 @@
     "@astrojs/preact/vite/postcss/nanoid": ["nanoid@3.3.12", "", { "bin": { "nanoid": "bin/nanoid.cjs" } }, "sha512-ZB9RH/39qpq5Vu6Y+NmUaFhQR6pp+M2Xt76XBnEwDaGcVAqhlvxrl3B2bKS5D3NH3QR76v3aSrKaF/Kiy7lEtQ=="],
 
     "@bridgething/catalog/@types/bun/bun-types/@types/node": ["@types/node@26.1.1", "", { "dependencies": { "undici-types": "~8.3.0" } }, "sha512-nxAkRSVkN1Y0JC1W8ky/fTfkGsMmcrRsbx+3XoZE+rMOX71kLYTV7fLXpqud1GpbpP5TuffXFqfX7fH2GgZREw=="],
+
+    "@bridgething/console/@types/bun/bun-types/@types/node": ["@types/node@26.1.1", "", { "dependencies": { "undici-types": "~8.3.0" } }, "sha512-nxAkRSVkN1Y0JC1W8ky/fTfkGsMmcrRsbx+3XoZE+rMOX71kLYTV7fLXpqud1GpbpP5TuffXFqfX7fH2GgZREw=="],
 
     "@bridgething/mobile/tailwindcss/postcss/nanoid": ["nanoid@3.3.12", "", { "bin": { "nanoid": "bin/nanoid.cjs" } }, "sha512-ZB9RH/39qpq5Vu6Y+NmUaFhQR6pp+M2Xt76XBnEwDaGcVAqhlvxrl3B2bKS5D3NH3QR76v3aSrKaF/Kiy7lEtQ=="],
 

@@ -199,6 +199,10 @@ headless-build:
   cargo build --release -p bridgething-headless
   cd headless && bun run build
 
+# Toolchains, build, systemd unit, started service. `just headless-install -y` to skip the prompts.
+headless-install *args:
+  headless/scripts/install.sh {{args}}
+
 # JVM suites for every gradle subproject
 test-kotlin:
   @bash -c 'source scripts/gradle-jdk.sh && gradle_jdk_env && JAVA_HOME="$GRADLE_JAVA" ./gradlew test :packages:companion:kotlin:companion:compileDebugAndroidTestSources {{gradle_force}} --no-daemon --console=plain --stacktrace -Porg.gradle.java.installations.paths="$GRADLE_INSTALLS" -Porg.gradle.java.installations.auto-download=false </dev/null'

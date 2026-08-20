@@ -9,8 +9,8 @@ over http.
 headless/
   src-server/     the rust binary (bridgething-headless)
   src/            the console entrypoint: http session, browser host adapter
-  systemd/        the unit an install drops in
-  scripts/        install.sh
+  systemd/        the unit template an install renders
+  scripts/        install.sh, which goes from a bare machine to a running service
 ```
 
 Both halves of the console are shared with the desktop app and neither is
@@ -47,20 +47,50 @@ just headless-dev            # the other, on :1421
 
 ```sh
 git clone https://github.com/JoeyEamigh/bridgething && cd bridgething
-cargo build --release -p bridgething-headless
-cd headless && bun run build && cd ..
 headless/scripts/install.sh
 ```
 
-That drops the binary and the console at `/opt/bridgething-console`, installs
-`bridgething-console.service`, starts it, and prints the url with its token.
-State lives under `/var/lib/bridgething-console`.
+That is the whole thing: it installs what the build needs (apt packages, a
+rust toolchain at or above the workspace's msrv, bun), builds both halves,
+renders the systemd unit, starts it, and prints the url with its token. It
+asks before installing anything; `-y` says yes to all of it. Running it again
+is how you upgrade.
+
+The binary and the console land in `/opt/bridgething-console`, state under
+`/var/lib/bridgething-console`.
+
+| flag | what it changes |
+| --- | --- |
+| `--prefix DIR` | where the binary and console land |
+| `--service NAME` | the unit name, and the state directory under `/var/lib` |
+| `--user NAME` | the unprivileged user the service runs as |
+| `--bind ADDR:PORT` | what the console listens on |
+| `--features LIST` | extra cargo features |
+| `--binary`, `--web` | install artifacts from somewhere other than the build |
+| `--no-deps`, `--no-build`, `--no-service` | skip a stage |
+| `-y` | do not ask |
 
 The default build leaves the voice stack out, because whisper and onnxruntime
 are a long build and a lot of memory for a pi. Turn them on with
 `--features voice`; turn on geoclue, freedesktop notifications, and
 speech-dispatcher with `--features desktop-session` if the box runs a session
 that offers them.
+
+### Building somewhere else
+
+A pi is a slow place to compile rust, and `bun install` pulls the whole
+monorepo's node_modules. Build on a bigger machine, copy the two artifacts
+over, and let the pi do only the install:
+
+```sh
+# on the build machine
+cargo build --release --target aarch64-unknown-linux-gnu -p bridgething-headless
+cd headless && bun run build
+
+# on the pi, in a checkout
+headless/scripts/install.sh --no-deps --no-build \
+  --binary ~/bridgething-headless --web ~/dist
+```
 
 ## Flags
 

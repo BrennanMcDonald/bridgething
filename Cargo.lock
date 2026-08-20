@@ -975,33 +975,13 @@ dependencies = [
 name = "bridgething-desktop"
 version = "0.10.0"
 dependencies = [
- "block2",
  "bridgething-companion",
  "bridgething-delivery",
- "bridgething-gateway",
- "chrono",
- "directories",
- "dispatch2",
- "futures",
- "iana-time-zone",
- "image",
+ "bridgething-host-shell",
  "libbridgething",
  "libc",
  "mdns-sd",
- "objc2",
- "objc2-avf-audio",
- "objc2-core-foundation",
- "objc2-core-graphics",
- "objc2-core-location",
- "objc2-core-ml",
- "objc2-foundation",
- "objc2-image-io",
- "objc2-uniform-type-identifiers",
- "ort",
- "rustls",
- "serde",
  "serde_json",
- "spotify",
  "tauri",
  "tauri-build",
  "tauri-plugin-autostart",
@@ -1013,11 +993,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
- "tracing-subscriber",
  "uuid",
- "whisper-rs",
- "windows 0.62.2",
- "zbus",
  "zip 8.6.0",
 ]
 
@@ -1057,6 +1033,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "bridgething-headless"
+version = "0.10.0"
+dependencies = [
+ "axum",
+ "bridgething-host-shell",
+ "clap",
+ "futures",
+ "mdns-sd",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tower-http",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
 name = "bridgething-host-gateway"
 version = "0.10.0"
 dependencies = [
@@ -1077,6 +1071,46 @@ dependencies = [
  "uuid",
  "zip 8.6.0",
  "zstd",
+]
+
+[[package]]
+name = "bridgething-host-shell"
+version = "0.10.0"
+dependencies = [
+ "block2",
+ "bridgething-companion",
+ "bridgething-delivery",
+ "bridgething-gateway",
+ "chrono",
+ "directories",
+ "dispatch2",
+ "futures",
+ "iana-time-zone",
+ "image",
+ "libbridgething",
+ "objc2",
+ "objc2-avf-audio",
+ "objc2-core-foundation",
+ "objc2-core-graphics",
+ "objc2-core-location",
+ "objc2-core-ml",
+ "objc2-foundation",
+ "objc2-image-io",
+ "objc2-uniform-type-identifiers",
+ "ort",
+ "rustls",
+ "serde",
+ "serde_json",
+ "spotify",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+ "whisper-rs",
+ "windows 0.62.2",
+ "zbus",
 ]
 
 [[package]]

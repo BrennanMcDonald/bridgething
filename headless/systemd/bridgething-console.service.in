@@ -1,3 +1,5 @@
+# Rendered from bridgething-console.service.in by scripts/install.sh.
+# Edits made to the installed copy are lost on the next install.
 [Unit]
 Description=bridgething console (headless companion host)
 Documentation=https://bridgething.com
@@ -6,15 +8,16 @@ Wants=network-online.target
 
 [Service]
 Type=exec
-ExecStart=/opt/bridgething-console/bridgething-headless
+ExecStart=@PREFIX@/bridgething-headless
 Restart=on-failure
 RestartSec=5
 
-User=bridgething
-Group=bridgething
-StateDirectory=bridgething-console
-Environment=BRIDGETHING_CONSOLE_DATA_DIR=/var/lib/bridgething-console
-Environment=BRIDGETHING_CONSOLE_WEB=/opt/bridgething-console/web
+User=@USER@
+Group=@USER@
+StateDirectory=@SERVICE@
+Environment=BRIDGETHING_CONSOLE_DATA_DIR=/var/lib/@SERVICE@
+Environment=BRIDGETHING_CONSOLE_WEB=@PREFIX@/web
+Environment=BRIDGETHING_CONSOLE_BIND=@BIND@
 Environment=RUST_LOG=warn,bridgething_headless=info,bridgething_host_shell=info,bridgething_companion=info
 
 NoNewPrivileges=yes
