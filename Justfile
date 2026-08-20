@@ -173,8 +173,8 @@ test-cross: build-image
 test-desktop:
   cargo test -p bridgething-desktop --locked
 
-# The shared host shell and the headless console
-test-host:
+# The headless console, over the host shell both surfaces share
+test-headless:
   cargo test -p bridgething-host-shell --locked
   cargo test -p bridgething-headless --locked
 
