@@ -109,39 +109,80 @@ ensure_packages() {
   sudo apt-get install -y "${missing[@]}"
 }
 
-ensure_rust() {
-  if ! command -v rustup >/dev/null && ! command -v cargo >/dev/null; then
-    say "rust is not here"
-    confirm "install it with rustup?" || die "cannot build without cargo"
-    curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --profile minimal
+# what rustc says it is, or nothing at all if the toolchain does not work. A
+# rustup with an empty toolchain store still answers `command -v rustc`, so
+# asking for a version is the only honest test.
+rustc_version() {
+  local said
+  said=$(rustc --version 2>/dev/null) || return 1
+  said=$(printf '%s' "$said" | awk '{print $2}')
+  [[ -n $said ]] || return 1
+  printf '%s' "$said"
+}
+
+install_rustup() {
+  curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --profile minimal
+  if [[ -f $HOME/.cargo/env ]]; then
     # shellcheck disable=SC1091
     source "$HOME/.cargo/env"
   fi
+}
 
-  # rustup can be installed with no toolchain in it at all, which is what a
-  # distro package leaves behind
-  if command -v rustup >/dev/null && ! rustup show active-toolchain >/dev/null 2>&1; then
-    say "rustup has no toolchain installed"
-    confirm "install stable and make it the default?" || die "cannot build without a toolchain"
-    rustup toolchain install stable
-    rustup default stable
+broken_rustup() {
+  cat >&2 <<'BROKEN'
+
+this box has a rustup that cannot produce a working rustc. a distro-packaged
+rustup often lands this way: the shims resolve, the toolchain store is empty,
+and every command re-syncs the channel and gets nowhere.
+
+what fixes it:
+
+    sudo apt remove -y rustup            # or: sudo apt remove -y rust-all
+    rm -rf ~/.rustup                     # the empty toolchain store
+    curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs | sh -s -- -y
+    source ~/.cargo/env
+
+then run this script again.
+BROKEN
+  exit 1
+}
+
+ensure_rust() {
+  local have
+  have=$(rustc_version) || have=
+
+  if [[ -z $have ]] && ! command -v rustup >/dev/null; then
+    say "rust is not here"
+    confirm "install it with rustup?" || die "cannot build without cargo"
+    install_rustup
+    have=$(rustc_version) || have=
   fi
 
-  command -v cargo >/dev/null || die "cargo is still not on PATH; open a new shell and run this again"
+  # a rustup can be installed with no toolchain in it at all, which is what a
+  # distro package leaves behind
+  if [[ -z $have ]] && command -v rustup >/dev/null; then
+    say "rustup has no working toolchain"
+    confirm "install stable and make it the default?" || die "cannot build without a toolchain"
+    rustup toolchain install stable || broken_rustup
+    rustup default stable || broken_rustup
+    have=$(rustc_version) || have=
+  fi
 
-  local have
-  have=$(rustc --version | awk '{print $2}')
+  # one more try is not worth it; the loop of channel syncs is the tell
+  [[ -n $have ]] || broken_rustup
+  command -v cargo >/dev/null || die "rustc works but cargo is not on PATH; open a new shell and run this again"
+
   if [[ -n $msrv && $(newest "$have" "$msrv") != "$have" ]]; then
     note "rustc $have is older than the $msrv this workspace needs"
-    if command -v rustup >/dev/null; then
-      confirm "update the stable toolchain?" || die "cannot build with rustc $have"
-      rustup update stable
-      rustup default stable
-    else
-      die "update rust to $msrv or newer"
-    fi
+    command -v rustup >/dev/null || die "update rust to $msrv or newer"
+    confirm "update the stable toolchain?" || die "cannot build with rustc $have"
+    rustup update stable
+    rustup default stable
+    have=$(rustc_version) || broken_rustup
+    [[ $(newest "$have" "$msrv") == "$have" ]] || die "the newest stable here is $have, older than the $msrv this workspace needs"
   fi
-  note "rustc $(rustc --version | awk '{print $2}')"
+
+  note "rustc $have"
 }
 
 ensure_bun() {

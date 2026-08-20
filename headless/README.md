@@ -80,6 +80,27 @@ are a long build and a lot of memory for a pi. Turn them on with
 speech-dispatcher with `--features desktop-session` if the box runs a session
 that offers them.
 
+### When the box has a distro rustup
+
+Debian and pi os package a rustup that can end up with shims in `PATH` and an
+empty toolchain store. It looks like this, forever:
+
+```
+stable-aarch64-unknown-linux-gnu unchanged - (rustc does not exist)
+info: syncing channel updates for 'stable-aarch64-unknown-linux-gnu'
+error: Missing manifest in toolchain 'stable-aarch64-unknown-linux-gnu'
+```
+
+The install script says so and stops rather than retrying. Replace it with the
+real one:
+
+```sh
+sudo apt remove -y rustup            # or: sudo apt remove -y rust-all
+rm -rf ~/.rustup
+curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs | sh -s -- -y
+source ~/.cargo/env
+```
+
 ### Building somewhere else
 
 A pi is a slow place to compile rust, and `bun install` pulls the whole
