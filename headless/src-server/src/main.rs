@@ -23,7 +23,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
   let auth = Auth::open(&config_dir, cli.token.clone(), cli.no_auth);
   let hints = Arc::new(BroadcastHints::new());
-  let sink: Arc<dyn HintSink> = Arc::clone(&hints);
+  // cloned as the concrete type, then unsized into the trait object
+  let sink: Arc<dyn HintSink> = hints.clone();
   let host = Host::boot(HostConfig::new(APP_NAME, cli.gateway_url(), paths), sink, verbosity).await?;
 
   // an artifact only matters for the push that follows it, and an sd card is small

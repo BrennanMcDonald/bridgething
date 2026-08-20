@@ -188,16 +188,18 @@ desktop-build:
 
 # The headless console against the vite dev server; run `just headless-serve` beside it
 headless-dev:
+  bun run build --filter=@bridgething/catalog
   cd headless && bun run dev
 
 # The headless host, serving the console assets from headless/dist
 headless-serve *args:
   cargo run -p bridgething-headless -- {{args}}
 
-# Binary plus console assets, ready for scripts/install.sh
+# Binary plus console assets, ready for scripts/install.sh. Through turbo, so the
+# packages the console imports are built before it.
 headless-build:
   cargo build --release -p bridgething-headless
-  cd headless && bun run build
+  bun run build --filter=@bridgething/headless-frontend
 
 # Toolchains, build, systemd unit, started service. `just headless-install -y` to skip the prompts.
 headless-install *args:

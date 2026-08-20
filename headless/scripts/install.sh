@@ -167,9 +167,10 @@ build() {
   say "building the host${FEATURES:+ with $FEATURES}"
   (cd "$repo" && cargo build "${flags[@]}")
 
+  # through turbo, so the workspace packages the console imports are built first
   say "building the console"
   (cd "$repo" && bun install)
-  (cd "$here" && bun run build)
+  (cd "$repo" && bun run build --filter=@bridgething/headless-frontend)
 }
 
 # MARK: install

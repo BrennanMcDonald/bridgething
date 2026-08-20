@@ -28,7 +28,7 @@ reimplemented here:
 Build both halves, then start the server:
 
 ```sh
-just headless-build          # cargo build --release -p bridgething-headless && bun run build
+just headless-build          # the binary, then the console through turbo
 just headless-serve          # or: cargo run -p bridgething-headless
 ```
 
@@ -42,6 +42,10 @@ For frontend iteration, run the server and vite side by side - vite proxies
 just headless-serve          # one terminal
 just headless-dev            # the other, on :1421
 ```
+
+Build the console through turbo, not by calling vite directly: the packages it
+imports are built ones, and turbo is what puts them in the right order. Both
+`just` recipes and the install script already do.
 
 ## Installing on a pi
 
@@ -85,7 +89,7 @@ over, and let the pi do only the install:
 ```sh
 # on the build machine
 cargo build --release --target aarch64-unknown-linux-gnu -p bridgething-headless
-cd headless && bun run build
+bun run build --filter=@bridgething/headless-frontend
 
 # on the pi, in a checkout
 headless/scripts/install.sh --no-deps --no-build \
