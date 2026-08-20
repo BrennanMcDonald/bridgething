@@ -7,6 +7,7 @@ members = [
   "crates/delivery/wasm",
   "tools/codegen",
   "desktop/src-tauri",
+  "headless/src-server",
 ]
 default-members = [
   "crates/*",
@@ -14,6 +15,7 @@ default-members = [
   "crates/delivery/napi",
   "tools/codegen",
   "desktop/src-tauri",
+  "headless/src-server",
 ]
 exclude = ["crates/delivery"]
 

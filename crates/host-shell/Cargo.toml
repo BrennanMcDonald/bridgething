@@ -1,0 +1,88 @@
+[package]
+name = "bridgething-host-shell"
+rust-version.workspace = true
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+homepage.workspace = true
+description = "the host-side companion shell shared by the desktop app and the headless server"
+
+[lib]
+name = "bridgething_host_shell"
+path = "src/lib.rs"
+
+[features]
+default = ["voice", "desktop-session"]
+# whisper transcription, the onnx intent runner, and the artifact validator that guards both
+voice = ["dep:whisper-rs", "dep:ort"]
+# the freedesktop services a logged-in session offers: geoclue, notifications, speech-dispatcher
+desktop-session = []
+
+[dependencies]
+bridgething-companion = { path = "../companion", features = ["native-io"] }
+bridgething-delivery = { path = "../delivery/core" }
+bridgething-gateway = { path = "../gateway-rs", features = ["native-ws"] }
+chrono = { version = "0.4.45", default-features = false, features = ["clock", "std"] }
+directories = "6.0.0"
+iana-time-zone = "0.1.65"
+libbridgething = { path = "../lib" }
+rustls = { version = "0.23.43", features = ["ring"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+spotify = { path = "../spotify", features = ["native-io"] }
+thiserror.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "sync", "time", "fs"] }
+tracing.workspace = true
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
+uuid = { workspace = true, features = ["v7"] }
+
+[dev-dependencies]
+tempfile = "3.27.0"
+
+[[example]]
+name = "nlu"
+required-features = ["voice"]
+
+[[example]]
+name = "resolver-eval"
+required-features = ["voice"]
+
+[target.'cfg(target_os = "macos")'.dependencies]
+block2 = "0.6.2"
+dispatch2 = "0.3.1"
+objc2 = "0.6.4"
+objc2-avf-audio = "0.3.2"
+objc2-core-foundation = "0.3.2"
+objc2-core-graphics = "0.3.2"
+objc2-core-location = "0.3.2"
+objc2-core-ml = "0.3.2"
+objc2-foundation = "0.3.2"
+objc2-image-io = "0.3.2"
+objc2-uniform-type-identifiers = "0.3.2"
+whisper-rs = { version = "0.16.0", features = ["metal"], optional = true }
+
+[target.'cfg(target_os = "macos")'.dev-dependencies]
+ort = "2.0.0-rc.13"
+
+[target.'cfg(any(target_os = "windows", target_os = "linux"))'.dependencies]
+image = { version = "0.25.10", default-features = false, features = ["jpeg", "png", "webp"] }
+ort = { version = "2.0.0-rc.13", optional = true }
+whisper-rs = { version = "0.16.0", features = ["tracing_backend"], optional = true }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+futures.workspace = true
+zbus = { version = "5.19.0", default-features = false, features = ["tokio"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { version = "0.62.2", features = [
+  "Devices_Geolocation",
+  "Foundation",
+  "Foundation_Collections",
+  "Media_Core",
+  "Media_Playback",
+  "Media_SpeechSynthesis",
+  "Networking_Connectivity",
+  "Storage_Streams",
+  "Win32_System_Com",
+] }

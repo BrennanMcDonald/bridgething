@@ -164,13 +164,19 @@ test-shipping:
     RUSTFLAGS='-L {{swupdate_libdir}}' LD_LIBRARY_PATH={{swupdate_libdir}} cargo test -p bridgething --locked --no-default-features --features {{device_features}}
   fi
 
-# The workspace suite against the device target inside the build image
+# The workspace suite against the device target inside the build image. The host
+# surfaces are not device code and their voice stack does not cross-build, so they sit it out.
 test-cross: build-image
-  {{container_run}} cargo test --workspace --exclude bridgething-desktop --target {{cross_target}} --locked --no-fail-fast -j 2 -- --test-threads 2
+  {{container_run}} cargo test --workspace --exclude bridgething-desktop --exclude bridgething-host-shell --exclude bridgething-headless --target {{cross_target}} --locked --no-fail-fast -j 2 -- --test-threads 2
 
 # The desktop shell's headless suite
 test-desktop:
   cargo test -p bridgething-desktop --locked
+
+# The shared host shell and the headless console
+test-host:
+  cargo test -p bridgething-host-shell --locked
+  cargo test -p bridgething-headless --locked
 
 # Tray app against the vite dev server
 desktop-dev:
@@ -179,6 +185,19 @@ desktop-dev:
 # Release bundle for the host platform
 desktop-build:
   cd desktop && bun run tauri build
+
+# The headless console against the vite dev server; run `just headless-serve` beside it
+headless-dev:
+  cd headless && bun run dev
+
+# The headless host, serving the console assets from headless/dist
+headless-serve *args:
+  cargo run -p bridgething-headless -- {{args}}
+
+# Binary plus console assets, ready for scripts/install.sh
+headless-build:
+  cargo build --release -p bridgething-headless
+  cd headless && bun run build
 
 # JVM suites for every gradle subproject
 test-kotlin:

@@ -1,9 +1,8 @@
 import type * as api from '@bridgething/companion-types';
-import type { CompanionSession, Endpoint, Invalidation, Topic, WebappResource } from '@bridgething/ui';
+import type { ConsoleSession, InstallOutcome, KnownDevice, OtaOutcome } from '@bridgething/console';
+import type { Endpoint, Invalidation, Topic, WebappResource } from '@bridgething/ui';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-
-import type { KnownDevice } from './desktop.ts';
 
 const HINTS: Record<string, Topic> = {
   'invalidate:session': 'session',
@@ -25,13 +24,9 @@ const HINTS: Record<string, Topic> = {
 
 const RESYNC = 'invalidate:all';
 
-export type OtaOutcome = { kind: 'completed' } | { kind: 'failed'; reason: string } | { kind: 'interrupted' };
-
-export type InstallOutcome = { kind: 'installed'; id: string } | { kind: 'failed'; reason: string };
-
-export class TauriSession implements CompanionSession {
+export class TauriSession implements ConsoleSession {
   readonly tier = 'companion' as const;
-  readonly host = 'desktop' as const;
+  readonly host = 'console' as const;
 
   private readonly listeners = new Set<(event: Invalidation) => void>();
   private unlisten: (() => void)[] = [];
@@ -143,7 +138,6 @@ export class TauriSession implements CompanionSession {
   setDeviceLogStreaming = (enabled: boolean) => invoke<void>('set_device_log_streaming', { enabled });
   debugLogging = () => invoke<boolean>('debug_logging');
   setDebugLogging = (enabled: boolean) => invoke<void>('set_debug_logging', { enabled });
-  exportLogs = (path: string, body: string) => invoke<void>('export_logs', { path, body });
 
   nowPlaying = () => invoke<api.NowPlaying | null>('now_playing');
   providers = () => invoke<api.ProviderInfo[]>('providers');

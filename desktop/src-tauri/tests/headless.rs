@@ -6,11 +6,13 @@ use std::{
   time::{Duration, Instant},
 };
 
-use bridgething_delivery::discovery::Discovery;
-use bridgething_desktop::{
-  commands::{self, InstallOutcome, OtaOutcome},
+use bridgething_desktop::commands;
+use bridgething_host_shell::{
+  Host, HostConfig,
   hints::{self, Hint, HintSink, Invalidation},
-  shell::{DEFAULT_GATEWAY_URL, DesktopPaths, Shell, ShellConfig},
+  logs::Verbosity,
+  ops::{InstallOutcome, OtaOutcome},
+  shell::{DEFAULT_GATEWAY_URL, HostPaths},
 };
 use libbridgething::{BRIDGETHING_MDNS_SERVICE_TYPE, gateway::WebappResourceKind};
 use mdns_sd::{ServiceDaemon, ServiceInfo};
@@ -196,23 +198,26 @@ fn write_bundle(dir: &Path, id: Uuid) -> PathBuf {
   path
 }
 
-fn mock_app(shell: Arc<Shell>) -> tauri::App<MockRuntime> {
+fn mock_app(host: Arc<Host>) -> tauri::App<MockRuntime> {
   mock_builder()
-    .manage(shell)
-    .manage(Discovery::spawn(|_| ()).expect("the responder starts"))
+    .manage(host)
     .invoke_handler(bridgething_desktop::desktop_commands!())
     .build(mock_context(noop_assets()))
     .expect("the shell's command surface builds without a window")
 }
 
-fn shell_config(url: impl Into<String>, spool: &Path) -> ShellConfig {
+fn host_config(url: impl Into<String>, spool: &Path) -> HostConfig {
   model_root();
-  ShellConfig::new(url, DesktopPaths::under(spool))
+  HostConfig::new("bridgething probe", url, HostPaths::under(spool))
 }
 
-fn probe_shell(spool: &Path) -> Arc<Shell> {
+fn probe_host_at(url: impl Into<String>, spool: &Path, hints: Arc<dyn HintSink>) -> Arc<Host> {
+  Host::assemble(host_config(url, spool), hints, Verbosity::inert()).expect("the host assembles")
+}
+
+fn probe_host(spool: &Path) -> Arc<Host> {
   let (tx, _rx) = mpsc::unbounded_channel();
-  Shell::create(shell_config(DEFAULT_GATEWAY_URL, spool), Arc::new(Channel { tx })).expect("the shell builds")
+  probe_host_at(DEFAULT_GATEWAY_URL, spool, Arc::new(Channel { tx }))
 }
 
 struct ModelRoot {
@@ -268,7 +273,7 @@ async fn an_announcing_gateway_is_offered_to_the_window() {
   let _registrar = announce(&instance, "Headless Probe");
 
   let spool = tempfile::tempdir().expect("a scratch directory");
-  let app = mock_app(probe_shell(spool.path()));
+  let app = mock_app(probe_host(spool.path()));
 
   let deadline = tokio::time::Instant::now() + SETTLE;
   let offered = loop {
@@ -297,7 +302,7 @@ async fn an_announcing_gateway_is_offered_to_the_window() {
 #[tokio::test(flavor = "multi_thread")]
 async fn the_window_is_told_which_gateway_a_bare_connect_would_reach() {
   let spool = tempfile::tempdir().expect("a scratch directory");
-  let app = mock_app(probe_shell(spool.path()));
+  let app = mock_app(probe_host(spool.path()));
 
   assert_eq!(
     commands::default_gateway(app.state()).await.expect("the fallback url"),
@@ -309,7 +314,7 @@ async fn the_window_is_told_which_gateway_a_bare_connect_would_reach() {
 #[tokio::test(flavor = "multi_thread")]
 async fn a_capability_with_no_backend_is_never_offered() {
   let spool = tempfile::tempdir().expect("a scratch directory");
-  let app = mock_app(probe_shell(spool.path()));
+  let app = mock_app(probe_host(spool.path()));
 
   let support = commands::capability_support(app.state())
     .await
@@ -351,9 +356,9 @@ async fn a_capability_with_no_backend_is_never_offered() {
 #[tokio::test(flavor = "multi_thread")]
 async fn the_model_root_override_is_honored_so_a_test_run_never_pulls_from_the_published_bucket() {
   let spool = tempfile::tempdir().expect("a scratch directory");
-  let shell = probe_shell(spool.path());
+  let host = probe_host(spool.path());
 
-  shell.start().await;
+  host.shell().start().await;
 
   let root = model_root();
   let deadline = tokio::time::Instant::now() + SETTLE;
@@ -378,9 +383,9 @@ async fn the_model_root_override_is_honored_so_a_test_run_never_pulls_from_the_p
 #[tokio::test(flavor = "multi_thread")]
 async fn dialing_a_gateway_that_is_not_listening_names_the_url_it_tried() {
   let spool = tempfile::tempdir().expect("a scratch directory");
-  let shell = probe_shell(spool.path());
-  shell.start().await;
-  let app = mock_app(shell);
+  let host = probe_host(spool.path());
+  host.shell().start().await;
+  let app = mock_app(host);
 
   let dead = "ws://127.0.0.1:1/".to_owned();
   let refused = commands::connect(app.state(), Some(dead.clone()))
@@ -409,10 +414,9 @@ async fn a_link_that_died_comes_back_on_its_own_and_one_the_user_dropped_does_no
 
   let spool = tempfile::tempdir().expect("a scratch directory");
   let (tx, _rx) = mpsc::unbounded_channel();
-  let shell =
-    Shell::create(shell_config(url.clone(), spool.path()), Arc::new(Channel { tx })).expect("the shell builds");
+  let shell = Arc::clone(probe_host_at(url.clone(), spool.path(), Arc::new(Channel { tx })).shell());
   shell.start().await;
-  bridgething_desktop::autoconnect::spawn(shell.clone(), Vec::new);
+  bridgething_host_shell::autoconnect::spawn(shell.clone(), Vec::new);
 
   tokio::time::sleep(Duration::from_millis(500)).await;
   assert!(
@@ -462,8 +466,7 @@ async fn a_daemon_that_shows_up_on_the_network_is_linked_without_anyone_asking()
 
   let spool = tempfile::tempdir().expect("a scratch directory");
   let (tx, _rx) = mpsc::unbounded_channel();
-  let shell =
-    Shell::create(shell_config(url.clone(), spool.path()), Arc::new(Channel { tx })).expect("the shell builds");
+  let shell = Arc::clone(probe_host_at(url.clone(), spool.path(), Arc::new(Channel { tx })).shell());
   shell.start().await;
 
   let announced = bridgething_delivery::discovery::Endpoint {
@@ -472,7 +475,7 @@ async fn a_daemon_that_shows_up_on_the_network_is_linked_without_anyone_asking()
     host: "127.0.0.1".to_owned(),
     nickname: Some("Desk Thing".to_owned()),
   };
-  bridgething_desktop::autoconnect::spawn(shell.clone(), move || vec![announced.clone()]);
+  bridgething_host_shell::autoconnect::spawn(shell.clone(), move || vec![announced.clone()]);
 
   assert!(
     settles(|| shell.is_linked(&url)).await,
@@ -513,11 +516,10 @@ async fn the_shell_holds_a_live_session_and_every_command_is_a_pull() {
     rx: Mutex::new(rx),
     seen: Mutex::new(Vec::new()),
   };
-  let shell =
-    Shell::create(shell_config(url.clone(), spool.path()), Arc::new(Channel { tx })).expect("the shell builds");
-  shell.start().await;
+  let host = probe_host_at(url.clone(), spool.path(), Arc::new(Channel { tx }));
+  host.shell().start().await;
 
-  let app = mock_app(shell);
+  let app = mock_app(host);
 
   let device_id = commands::connect(app.state(), None)
     .await
@@ -664,7 +666,7 @@ async fn the_shell_holds_a_live_session_and_every_command_is_a_pull() {
     "a resource pull is idempotent: the have cue makes the second one cheap, not different"
   );
 
-  app.state::<Arc<Shell>>().session().resumed().await;
+  app.state::<Arc<Host>>().shell().session().resumed().await;
   assert!(
     heard.wait(hints::SESSION, SETTLE).await,
     "coming back to the foreground invalidates everything and refetches nothing itself"
@@ -702,11 +704,10 @@ async fn a_car_thing_on_the_link_answers_the_whole_pull_surface() {
     rx: Mutex::new(rx),
     seen: Mutex::new(Vec::new()),
   };
-  let shell =
-    Shell::create(shell_config(url.clone(), spool.path()), Arc::new(Channel { tx })).expect("the shell builds");
-  shell.start().await;
+  let host = probe_host_at(url.clone(), spool.path(), Arc::new(Channel { tx }));
+  host.shell().start().await;
 
-  let app = mock_app(shell);
+  let app = mock_app(host);
   let device_id = commands::connect(app.state(), Some(url.clone()))
     .await
     .expect("the device accepts a link");
@@ -750,10 +751,9 @@ async fn two_daemons_stay_linked_and_the_window_picks_between_them() {
 
   let spool = tempfile::tempdir().expect("a scratch directory");
   let (tx, _rx) = mpsc::unbounded_channel();
-  let shell =
-    Shell::create(shell_config(first.clone(), spool.path()), Arc::new(Channel { tx })).expect("the shell builds");
-  shell.start().await;
-  let app = mock_app(shell);
+  let host = probe_host_at(first.clone(), spool.path(), Arc::new(Channel { tx }));
+  host.shell().start().await;
+  let app = mock_app(host);
 
   commands::connect(app.state(), Some(first.clone()))
     .await

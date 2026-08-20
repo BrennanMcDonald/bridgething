@@ -1,18 +1,17 @@
+import { App, attachHost, seed } from '@bridgething/console';
 import { SessionProvider } from '@bridgething/ui';
 import { render } from 'preact';
 
 import './app.css';
-import { App } from './App.tsx';
-import { autostart } from './stores/autostart.ts';
-import { seed } from './stores/session.ts';
+import { tauriHost } from './tauri-host.tsx';
 import { TauriSession } from './tauri-session.ts';
 
 const root = document.getElementById('app');
 if (!root) throw new Error('the shell template is missing its mount point');
 
+attachHost(tauriHost);
 const session = await TauriSession.start();
 await seed(session);
-void autostart.refresh();
 
 render(
   <SessionProvider session={session}>

@@ -1,0 +1,32 @@
+[Unit]
+Description=bridgething console (headless companion host)
+Documentation=https://bridgething.com
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+ExecStart=/opt/bridgething-console/bridgething-headless
+Restart=on-failure
+RestartSec=5
+
+User=bridgething
+Group=bridgething
+StateDirectory=bridgething-console
+Environment=BRIDGETHING_CONSOLE_DATA_DIR=/var/lib/bridgething-console
+Environment=BRIDGETHING_CONSOLE_WEB=/opt/bridgething-console/web
+Environment=RUST_LOG=warn,bridgething_headless=info,bridgething_host_shell=info,bridgething_companion=info
+
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+RestrictNamespaces=yes
+LockPersonality=yes
+
+[Install]
+WantedBy=multi-user.target

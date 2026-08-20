@@ -1,31 +1,17 @@
-pub mod autoconnect;
-pub mod backends;
-pub mod capabilities;
 pub mod commands;
 pub mod hints;
-pub mod known_device;
-pub mod logs;
 pub mod process;
-pub mod route;
-pub mod shell;
-pub mod sources;
-pub mod store;
 pub mod theme;
 pub mod tray;
 
 use std::sync::Arc;
 
-use bridgething_delivery::discovery::Discovery;
+use bridgething_host_shell::{Host, HostConfig, HostPaths, hints::HintSink, logs, shell::gateway_url_from_env};
 use tauri::Manager;
-use tracing_subscriber::{layer::SubscriberExt as _, util::SubscriberInitExt as _};
 
-use crate::{
-  hints::{ENDPOINTS, Hint, HintSink, Visibility, WindowHints},
-  route::Route,
-  shell::{DesktopPaths, Shell, ShellConfig},
-  sources::Sources,
-};
+use crate::hints::{Visibility, WindowHints};
 
+const APP_NAME: &str = "bridgething desktop";
 const AUTOSTART_ARG: &str = "--autostart";
 
 #[macro_export]
@@ -104,13 +90,7 @@ macro_rules! desktop_commands {
 }
 
 pub fn run() {
-  let (filter, reload) = tracing_subscriber::reload::Layer::new(logs::filter(false));
-  tracing_subscriber::registry()
-    .with(filter)
-    .with(tracing_subscriber::fmt::layer().with_writer(std::io::stderr))
-    .with(logs::RingLayer)
-    .init();
-  let verbosity = Arc::new(logs::Verbosity::new(reload));
+  let verbosity = logs::install();
 
   let resident = std::env::args().any(|arg| arg == AUTOSTART_ARG);
 
@@ -126,32 +106,16 @@ pub fn run() {
     .plugin(tauri_plugin_dialog::init())
     .plugin(tauri_plugin_updater::Builder::new().build())
     .setup(move |app| {
-      app.manage(verbosity);
       let visible = if resident {
         Visibility::hidden()
       } else {
         Visibility::shown()
       };
       app.manage(visible.clone());
-      let hints = Arc::new(WindowHints::new(app.handle().clone(), visible));
-      let config = ShellConfig::from_env()?;
-      let paths = DesktopPaths::xdg()?;
-      let shell = Shell::create(config, hints.clone())?;
-      logs::attach(shell.session().log_inbox());
-      tauri::async_runtime::block_on(shell.start());
-      let wake = shell.wake();
-      let discovery = Discovery::spawn(move |_| {
-        hints.emit(Hint::bare(ENDPOINTS));
-        wake.notify_one();
-      })?;
-      autoconnect::spawn(shell.clone(), {
-        let discovery = Arc::clone(&discovery);
-        move || discovery.endpoints()
-      });
-      app.manage(shell);
-      app.manage(discovery);
-      app.manage(Sources::open(&paths.config_dir));
-      app.manage(Route::open(&paths.config_dir));
+      let hints: Arc<dyn HintSink> = Arc::new(WindowHints::new(app.handle().clone(), visible));
+      let config = HostConfig::new(APP_NAME, gateway_url_from_env(), HostPaths::xdg()?);
+      let host = tauri::async_runtime::block_on(Host::boot(config, hints, verbosity))?;
+      app.manage(host);
       tray::install(app.handle())?;
       theme::sync(app.handle());
       if resident {

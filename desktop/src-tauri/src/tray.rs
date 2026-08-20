@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use bridgething_host_shell::{Host, hints::RESYNC};
 use tauri::{
   AppHandle, Emitter, Manager, Runtime, Window, WindowEvent,
   image::Image,
@@ -7,10 +8,7 @@ use tauri::{
   tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
 };
 
-use crate::{
-  hints::{RESYNC, Visibility},
-  shell::Shell,
-};
+use crate::hints::Visibility;
 
 pub const MAIN_WINDOW: &str = "main";
 
@@ -70,11 +68,11 @@ pub fn present<R: Runtime>(app: &AppHandle<R>) {
   watch(app, true);
   let _ = app.emit(RESYNC, ());
 
-  if let Some(shell) = app.try_state::<Arc<Shell>>() {
-    let shell = Arc::clone(&shell);
+  if let Some(host) = app.try_state::<Arc<Host>>() {
+    let host = Arc::clone(&host);
     tauri::async_runtime::spawn(async move {
-      shell.session().resumed().await;
-      shell.session().time_changed().await;
+      host.shell().session().resumed().await;
+      host.shell().session().time_changed().await;
     });
   }
 }

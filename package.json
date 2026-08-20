@@ -42,7 +42,8 @@
     "packages/webapps/catalog/*",
     "mobile",
     "site",
-    "desktop"
+    "desktop",
+    "headless"
   ],
   "patchedDependencies": {
     "react-native-nitro-modules@0.35.5": "patches/react-native-nitro-modules@0.35.5.patch",

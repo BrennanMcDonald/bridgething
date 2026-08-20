@@ -8,10 +8,11 @@ to keep that split intact.
 
 The repo splits into two top-level workspace roots:
 
-- `crates/` — Rust workspace members. Two families: the daemon side (`crates/lib`, `crates/core`, `crates/iap2`, `crates/mfi`, `crates/mfi-proxy`, `crates/dsp`, `crates/wakeword`, ...) and the shared companion core (`crates/sdk-runtime`, `crates/io`, `crates/gateway-rs`, `crates/delivery/{core,napi,wasm}`, `crates/companion`, plus `crates/spotify` and `crates/nlu` linked into it). `crates/client-rs` and `crates/host-gateway` are the Rust-side consumers. The cargo workspace also pulls in `tools/codegen/` and `desktop/src-tauri/`.
-- `packages/` — Bun/turbo workspace members (`packages/browser`, `packages/client-ts`, `packages/ui`, `packages/updater`, `packages/session-rn`, `packages/webapp-shared`, `packages/webapps/{builtin,catalog}/*`). `builtin` rides the daemon release and is never published to the catalog; `catalog` is what the store distributes. `packages/ui` is preact + tailwind shared by the desktop app and the site. `packages/companion/{swift,kotlin}` and `packages/asr` are the mobile platform shells over the shared core, not bun members.
+- `crates/` — Rust workspace members. Two families: the daemon side (`crates/lib`, `crates/core`, `crates/iap2`, `crates/mfi`, `crates/mfi-proxy`, `crates/dsp`, `crates/wakeword`, ...) and the shared companion core (`crates/sdk-runtime`, `crates/io`, `crates/gateway-rs`, `crates/delivery/{core,napi,wasm}`, `crates/companion`, plus `crates/spotify` and `crates/nlu` linked into it). `crates/client-rs` and `crates/host-gateway` are the Rust-side consumers. `crates/host-shell` is the host side of the companion core (the shell, the platform backends, and every op a host surface answers), shared by the desktop app and the headless server. The cargo workspace also pulls in `tools/codegen/`, `desktop/src-tauri/`, and `headless/src-server/`.
+- `packages/` — Bun/turbo workspace members (`packages/browser`, `packages/client-ts`, `packages/ui`, `packages/console`, `packages/updater`, `packages/session-rn`, `packages/webapp-shared`, `packages/webapps/{builtin,catalog}/*`). `packages/console` is the host console: every screen the desktop app and the headless web ui both show. `builtin` rides the daemon release and is never published to the catalog; `catalog` is what the store distributes. `packages/ui` is preact + tailwind shared by the desktop app and the site. `packages/companion/{swift,kotlin}` and `packages/asr` are the mobile platform shells over the shared core, not bun members.
 - `mobile/` — RN app, consumer of the packages.
 - `desktop/` — tray-resident Tauri app, laid out the way `create-tauri-app` scaffolds one: the app root is `desktop/` itself (`package.json`, `index.html`, `vite.config.ts`, preact sources under `src/`) with `src-tauri/` beside them. The two deviations from the scaffold are deliberate: `src-tauri/` is a member of the root cargo workspace, and the frontend is a bun workspace member (`@bridgething/desktop-frontend`) so it shares `packages/ui`. `src-tauri/` links `crates/companion` natively and is the only place state lives; the frontend holds none of it.
+- `headless/` — the companion host for a machine with no desktop (a raspberry pi), laid out the way `desktop/` is: the vite app at the root (`package.json`, `index.html`, `src/`) with the rust server beside it in `src-server/`. It serves `packages/console` over http instead of in a webview.
 - `site/` — bridgething.com. Astro + preact islands, deployed to cloudflare.
 
 The lib/core split below is the load-bearing one. Naming convention: Rust crates use kebab-case package names (`bridgething-mfi`); TS packages use scoped names (`@bridgething/lib`).
@@ -49,6 +50,25 @@ chromium CDP driver, persistent state, hardware drivers (ALS, mic),
 systemd integration. The binary lives here.
 
 Core depends on lib for wire types and re-exports nothing.
+
+### The host surfaces: one shell, one console, two thin wrappers
+
+`desktop/` and `headless/` are both thin. Neither owns state, ops, or screens:
+
+- Rust state and ops live in `crates/host-shell`. `Host::boot` stands up the
+  shell, mdns discovery, and auto-connect; `ops::*` are the operations a
+  surface can perform. `desktop/src-tauri/src/commands.rs` is one
+  `#[tauri::command]` line per op; `headless/src-server/src/rpc.rs` is one
+  match arm per op. Neither has a body of its own.
+- Screens live in `packages/console`. Each surface supplies a session (the
+  transport to the ops) and a `HostAdapter` (the handful of things the ops
+  cannot do: pick a file, save a file, the clipboard, autostart, self-update).
+  A capability a host lacks is `null` and the screen leaves that row out.
+
+If you are adding an operation, it goes in `crates/host-shell/src/ops.rs` and
+gets a line in **both** surfaces. If you are adding a screen, it goes in
+`packages/console` and both surfaces get it for free. A feature that exists on
+only one host is a `HostAdapter` capability, not a copied screen.
 
 ### crates/client-rs/, packages/browser/
 
@@ -248,6 +268,10 @@ cheap.
 - `just codegen` after any change to a lib type that crosses to TS;
   `just companion-bindings` after any change to the shared core's
   FFI surface.
+- `just headless-build` builds the headless host and its console;
+  `just headless-serve` runs it, `just headless-dev` puts vite in front of it.
+  Its default feature set drops voice, because whisper and onnxruntime are too
+  much build for a pi; `--features voice` puts them back.
 - No emdashes or endashes.
 - NEVER #[allow(dead_code)]. Period. It's a useful metric.
 - Comments in core/ should be MINIMAL and only for gotchas (of which

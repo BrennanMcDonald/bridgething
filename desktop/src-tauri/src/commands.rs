@@ -1,545 +1,370 @@
 use std::{path::PathBuf, sync::Arc};
 
 use bridgething_companion::api::{
-  ActiveWebapp, CapabilityFlags, CompanionError, ConfigEntry, DeviceLogLine, DeviceMetaEntry, DocEntry, NowPlaying,
-  OtaPollConfig, ProviderInfo, ProviderTokens, SessionHostInfo, SessionPeer, SessionSnapshot, VoiceModelState,
-  WebappInfo, WebappSlot, WebappSlots,
+  ActiveWebapp, CapabilityFlags, ConfigEntry, DeviceLogLine, DeviceMetaEntry, DocEntry, NowPlaying, OtaPollConfig,
+  ProviderInfo, ProviderTokens, SessionHostInfo, SessionPeer, SessionSnapshot, VoiceModelState, WebappInfo, WebappSlot,
+  WebappSlots,
   ota::{ArtifactDigest, OtaAvailable, OtaDiscoverManifest, OtaPollStatus, OtaRun},
 };
-use bridgething_delivery::{
-  discovery::{Discovery, Endpoint},
-  ota::{event::OtaPhaseSnapshot, service::WebappInstallResult, stream::FileSource},
-  seam::BlobStore,
-  transfer::FragmentSource,
+use bridgething_delivery::discovery::Endpoint;
+use bridgething_host_shell::{
+  Host,
+  known_device::KnownDevice,
+  ops::{self, Answer, InstallOutcome, OtaOutcome, WebappResource},
 };
 use libbridgething::gateway::WebappResourceKind;
-use serde::Serialize;
 use tauri::{AppHandle, Runtime, State};
-use uuid::Uuid;
-
-use crate::{
-  hints::{self, Hint},
-  known_device::KnownDevice,
-  logs::Verbosity,
-  route::Route,
-  shell::{Shell, ShellError},
-  sources::Sources,
-};
-
-#[derive(Debug, thiserror::Error, Serialize)]
-#[serde(tag = "kind", content = "reason", rename_all = "camelCase")]
-pub enum CommandError {
-  #[error("no link to a daemon")]
-  NotConnected,
-  #[error("{0}")]
-  Link(String),
-  #[error("{0}")]
-  Device(String),
-  #[error("{0}")]
-  Artifact(String),
-  #[error("{0}")]
-  Host(String),
-}
-
-impl From<ShellError> for CommandError {
-  fn from(error: ShellError) -> Self {
-    match error {
-      ShellError::NotConnected => Self::NotConnected,
-      other => Self::Link(other.to_string()),
-    }
-  }
-}
-
-impl From<CompanionError> for CommandError {
-  fn from(error: CompanionError) -> Self {
-    match error {
-      CompanionError::NotConnected => Self::NotConnected,
-      CompanionError::Cancelled => Self::Device("cancelled".to_owned()),
-      CompanionError::ResourceNotAvailable => Self::Artifact("resource not available".to_owned()),
-      CompanionError::Runtime(reason) => Self::Link(reason),
-      CompanionError::Device(reason) => Self::Device(reason),
-    }
-  }
-}
-
-type Answer<T> = Result<T, CommandError>;
-
-fn webapp_id(raw: &str) -> Answer<Uuid> {
-  Uuid::parse_str(raw).map_err(|_| CommandError::Device(format!("not a webapp id: {raw}")))
-}
-
-fn peer(shell: &Shell) -> Answer<String> {
-  shell.peer().ok_or(CommandError::NotConnected)
-}
-
-// MARK: pulls
 
 #[tauri::command]
-pub async fn session_snapshot(shell: State<'_, Arc<Shell>>) -> Answer<SessionSnapshot> {
-  Ok(shell.session().snapshot().await)
+pub async fn session_snapshot(host: State<'_, Arc<Host>>) -> Answer<SessionSnapshot> {
+  ops::session_snapshot(&host).await
 }
 
 #[tauri::command]
-pub async fn host_info(shell: State<'_, Arc<Shell>>) -> Answer<SessionHostInfo> {
-  Ok(shell.session().snapshot().await.host_info)
+pub async fn host_info(host: State<'_, Arc<Host>>) -> Answer<SessionHostInfo> {
+  ops::host_info(&host).await
 }
 
 #[tauri::command]
-pub async fn capabilities(shell: State<'_, Arc<Shell>>) -> Answer<CapabilityFlags> {
-  Ok(shell.session().snapshot().await.capability_flags)
+pub async fn capabilities(host: State<'_, Arc<Host>>) -> Answer<CapabilityFlags> {
+  ops::capabilities(&host).await
 }
 
 #[tauri::command]
-pub async fn capability_support(shell: State<'_, Arc<Shell>>) -> Answer<CapabilityFlags> {
-  Ok(shell.capability_support())
+pub async fn capability_support(host: State<'_, Arc<Host>>) -> Answer<CapabilityFlags> {
+  ops::capability_support(&host).await
 }
 
 #[tauri::command]
-pub async fn providers(shell: State<'_, Arc<Shell>>) -> Answer<Vec<ProviderInfo>> {
-  Ok(shell.session().snapshot().await.providers)
+pub async fn providers(host: State<'_, Arc<Host>>) -> Answer<Vec<ProviderInfo>> {
+  ops::providers(&host).await
 }
 
 #[tauri::command]
-pub async fn provider_priority(shell: State<'_, Arc<Shell>>) -> Answer<Vec<String>> {
-  Ok(shell.session().snapshot().await.provider_priority)
+pub async fn provider_priority(host: State<'_, Arc<Host>>) -> Answer<Vec<String>> {
+  ops::provider_priority(&host).await
 }
 
 #[tauri::command]
-pub async fn library_provider(shell: State<'_, Arc<Shell>>) -> Answer<Option<String>> {
-  Ok(shell.session().snapshot().await.library_provider)
+pub async fn library_provider(host: State<'_, Arc<Host>>) -> Answer<Option<String>> {
+  ops::library_provider(&host).await
 }
 
 #[tauri::command]
-pub async fn peers(shell: State<'_, Arc<Shell>>) -> Answer<Vec<SessionPeer>> {
-  Ok(shell.session().snapshot().await.peers)
+pub async fn peers(host: State<'_, Arc<Host>>) -> Answer<Vec<SessionPeer>> {
+  ops::peers(&host).await
 }
 
 #[tauri::command]
-pub async fn now_playing(shell: State<'_, Arc<Shell>>) -> Answer<Option<NowPlaying>> {
-  Ok(shell.session().snapshot().await.now_playing)
+pub async fn now_playing(host: State<'_, Arc<Host>>) -> Answer<Option<NowPlaying>> {
+  ops::now_playing(&host).await
 }
 
 #[tauri::command]
-pub async fn device_meta(shell: State<'_, Arc<Shell>>) -> Answer<Vec<DeviceMetaEntry>> {
-  Ok(shell.session().snapshot().await.device_meta)
+pub async fn device_meta(host: State<'_, Arc<Host>>) -> Answer<Vec<DeviceMetaEntry>> {
+  ops::device_meta(&host).await
 }
 
 #[tauri::command]
-pub async fn device_auto_resume(shell: State<'_, Arc<Shell>>) -> Answer<bool> {
-  let Some(device_id) = shell.peer() else {
-    return Ok(true);
-  };
-  Ok(
-    shell
-      .session()
-      .companion_debug()
-      .auto_resume
-      .into_iter()
-      .find(|pref| pref.device_id == device_id)
-      .map(|pref| pref.enabled)
-      .unwrap_or(true),
-  )
+pub async fn device_auto_resume(host: State<'_, Arc<Host>>) -> Answer<bool> {
+  ops::device_auto_resume(&host).await
 }
 
 #[tauri::command]
-pub async fn device_log_streaming(shell: State<'_, Arc<Shell>>) -> Answer<bool> {
-  Ok(shell.log_streaming())
+pub async fn device_log_streaming(host: State<'_, Arc<Host>>) -> Answer<bool> {
+  ops::device_log_streaming(&host).await
 }
 
 #[tauri::command]
-pub async fn debug_logging(verbosity: State<'_, Arc<Verbosity>>) -> Answer<bool> {
-  Ok(verbosity.get())
+pub async fn debug_logging(host: State<'_, Arc<Host>>) -> Answer<bool> {
+  ops::debug_logging(&host).await
 }
 
 #[tauri::command]
-pub async fn voice_model(shell: State<'_, Arc<Shell>>) -> Answer<VoiceModelState> {
-  Ok(shell.session().snapshot().await.voice_model)
+pub async fn voice_model(host: State<'_, Arc<Host>>) -> Answer<VoiceModelState> {
+  ops::voice_model(&host).await
 }
 
 #[tauri::command]
-pub async fn ota_runs(shell: State<'_, Arc<Shell>>) -> Answer<Vec<OtaRun>> {
-  Ok(shell.session().snapshot().await.ota_runs)
+pub async fn ota_runs(host: State<'_, Arc<Host>>) -> Answer<Vec<OtaRun>> {
+  ops::ota_runs(&host).await
 }
 
 #[tauri::command]
-pub async fn ota_available(shell: State<'_, Arc<Shell>>) -> Answer<Vec<OtaAvailable>> {
-  Ok(shell.session().snapshot().await.ota_available)
+pub async fn ota_available(host: State<'_, Arc<Host>>) -> Answer<Vec<OtaAvailable>> {
+  ops::ota_available(&host).await
 }
 
 #[tauri::command]
-pub async fn ota_poll(shell: State<'_, Arc<Shell>>) -> Answer<OtaPollStatus> {
-  Ok(shell.session().snapshot().await.ota_poll)
+pub async fn ota_poll(host: State<'_, Arc<Host>>) -> Answer<OtaPollStatus> {
+  ops::ota_poll(&host).await
 }
 
 #[tauri::command]
-pub async fn webapps(shell: State<'_, Arc<Shell>>) -> Answer<Vec<WebappInfo>> {
-  Ok(shell.session().list_webapps(peer(&shell)?).await?)
+pub async fn webapps(host: State<'_, Arc<Host>>) -> Answer<Vec<WebappInfo>> {
+  ops::webapps(&host).await
 }
 
 #[tauri::command]
-pub async fn webapp_active(shell: State<'_, Arc<Shell>>) -> Answer<Option<ActiveWebapp>> {
-  Ok(shell.session().current_webapp(peer(&shell)?).await?)
+pub async fn webapp_active(host: State<'_, Arc<Host>>) -> Answer<Option<ActiveWebapp>> {
+  ops::webapp_active(&host).await
 }
 
 #[tauri::command]
-pub async fn webapp_slots(shell: State<'_, Arc<Shell>>) -> Answer<WebappSlots> {
-  Ok(shell.session().webapp_slots(peer(&shell)?).await?)
+pub async fn webapp_slots(host: State<'_, Arc<Host>>) -> Answer<WebappSlots> {
+  ops::webapp_slots(&host).await
 }
 
 #[tauri::command]
-pub async fn webapp_config(shell: State<'_, Arc<Shell>>, id: String) -> Answer<Vec<ConfigEntry>> {
-  Ok(shell.session().list_webapp_config(peer(&shell)?, id).await?)
+pub async fn webapp_config(host: State<'_, Arc<Host>>, id: String) -> Answer<Vec<ConfigEntry>> {
+  ops::webapp_config(&host, id).await
 }
 
 #[tauri::command]
-pub async fn webapp_doc(shell: State<'_, Arc<Shell>>, id: String) -> Answer<Vec<DocEntry>> {
-  Ok(shell.session().list_webapp_doc(peer(&shell)?, id).await?)
+pub async fn webapp_doc(host: State<'_, Arc<Host>>, id: String) -> Answer<Vec<DocEntry>> {
+  ops::webapp_doc(&host, id).await
 }
 
 #[tauri::command]
-pub async fn webapp_doc_entry(shell: State<'_, Arc<Shell>>, id: String, key: String) -> Answer<Option<String>> {
-  Ok(shell.session().get_webapp_doc(peer(&shell)?, id, key).await?)
+pub async fn webapp_doc_entry(host: State<'_, Arc<Host>>, id: String, key: String) -> Answer<Option<String>> {
+  ops::webapp_doc_entry(&host, id, key).await
 }
 
 #[tauri::command]
-pub async fn device_logs(shell: State<'_, Arc<Shell>>, limit: u32) -> Answer<Vec<DeviceLogLine>> {
-  Ok(shell.session().device_log_snapshot(limit))
+pub async fn device_logs(host: State<'_, Arc<Host>>, limit: u32) -> Answer<Vec<DeviceLogLine>> {
+  ops::device_logs(&host, limit).await
 }
 
 #[tauri::command]
 pub async fn export_logs(path: PathBuf, body: String) -> Answer<()> {
-  std::fs::write(&path, body).map_err(|reason| CommandError::Host(format!("{}: {reason}", path.display())))
+  ops::export_logs(path, body).await
 }
 
 #[tauri::command]
-pub async fn ota_manifest(shell: State<'_, Arc<Shell>>, root_url: String) -> Answer<OtaDiscoverManifest> {
-  Ok(shell.session().fetch_ota_manifest(root_url).await?)
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct WebappResource {
-  pub digest: String,
-  pub mime: Option<String>,
-  pub bytes: Vec<u8>,
+pub async fn ota_manifest(host: State<'_, Arc<Host>>, root_url: String) -> Answer<OtaDiscoverManifest> {
+  ops::ota_manifest(&host, root_url).await
 }
 
 #[tauri::command]
 pub async fn webapp_resource(
-  shell: State<'_, Arc<Shell>>,
+  host: State<'_, Arc<Host>>,
   id: String,
   kind: WebappResourceKind,
 ) -> Answer<WebappResource> {
-  let id = webapp_id(&id)?;
-  let link = shell.link()?;
-  let cached = shell
-    .resources()?
-    .fetch(&link, id, kind)
-    .await
-    .map_err(|error| CommandError::Device(format!("{error:?}")))?;
-  let bytes = shell
-    .blobs()
-    .get(&cached.digest)
-    .map_err(CommandError::Artifact)?
-    .ok_or_else(|| CommandError::Artifact(format!("the resource store lost {}", cached.digest)))?;
-  Ok(WebappResource {
-    digest: cached.digest,
-    mime: cached.mime,
-    bytes,
-  })
-}
-
-// MARK: actions
-
-#[tauri::command]
-pub async fn endpoints(discovery: State<'_, Arc<Discovery>>) -> Answer<Vec<Endpoint>> {
-  Ok(discovery.endpoints())
+  ops::webapp_resource(&host, id, kind).await
 }
 
 #[tauri::command]
-pub async fn default_gateway(shell: State<'_, Arc<Shell>>) -> Answer<String> {
-  Ok(shell.gateway_url().to_owned())
+pub async fn endpoints(host: State<'_, Arc<Host>>) -> Answer<Vec<Endpoint>> {
+  ops::endpoints(&host).await
 }
 
 #[tauri::command]
-pub async fn route(route: State<'_, Route>) -> Answer<String> {
-  Ok(route.get())
+pub async fn default_gateway(host: State<'_, Arc<Host>>) -> Answer<String> {
+  ops::default_gateway(&host).await
 }
 
 #[tauri::command]
-pub async fn set_route(route: State<'_, Route>, path: String) -> Answer<()> {
-  route.set(path);
-  Ok(())
+pub async fn route(host: State<'_, Arc<Host>>) -> Answer<String> {
+  ops::route(&host).await
 }
 
 #[tauri::command]
-pub async fn catalog_sources(sources: State<'_, Sources>) -> Answer<Vec<String>> {
-  Ok(sources.list())
+pub async fn set_route(host: State<'_, Arc<Host>>, path: String) -> Answer<()> {
+  ops::set_route(&host, path).await
 }
 
 #[tauri::command]
-pub async fn add_catalog_source(sources: State<'_, Sources>, url: String) -> Answer<Vec<String>> {
-  Ok(sources.add(url))
+pub async fn catalog_sources(host: State<'_, Arc<Host>>) -> Answer<Vec<String>> {
+  ops::catalog_sources(&host).await
 }
 
 #[tauri::command]
-pub async fn remove_catalog_source(sources: State<'_, Sources>, url: String) -> Answer<Vec<String>> {
-  Ok(sources.remove(&url))
+pub async fn add_catalog_source(host: State<'_, Arc<Host>>, url: String) -> Answer<Vec<String>> {
+  ops::add_catalog_source(&host, url).await
 }
 
 #[tauri::command]
-pub async fn connect(shell: State<'_, Arc<Shell>>, url: Option<String>) -> Answer<String> {
-  Ok(shell.connect(url).await?)
+pub async fn remove_catalog_source(host: State<'_, Arc<Host>>, url: String) -> Answer<Vec<String>> {
+  ops::remove_catalog_source(&host, url).await
 }
 
 #[tauri::command]
-pub async fn disconnect(shell: State<'_, Arc<Shell>>, device_id: Option<String>) -> Answer<()> {
-  shell.disconnect(device_id).await;
-  Ok(())
+pub async fn connect(host: State<'_, Arc<Host>>, url: Option<String>) -> Answer<String> {
+  ops::connect(&host, url).await
 }
 
 #[tauri::command]
-pub async fn known_devices(shell: State<'_, Arc<Shell>>) -> Answer<Vec<KnownDevice>> {
-  Ok(shell.known_devices())
+pub async fn disconnect(host: State<'_, Arc<Host>>, device_id: Option<String>) -> Answer<()> {
+  ops::disconnect(&host, device_id).await
 }
 
 #[tauri::command]
-pub async fn set_device_auto_connect(shell: State<'_, Arc<Shell>>, url: String, enabled: bool) -> Answer<()> {
-  shell.set_auto_connect(&url, enabled);
-  Ok(())
+pub async fn known_devices(host: State<'_, Arc<Host>>) -> Answer<Vec<KnownDevice>> {
+  ops::known_devices(&host).await
 }
 
 #[tauri::command]
-pub async fn forget_known_device(shell: State<'_, Arc<Shell>>, url: String) -> Answer<()> {
-  shell.forget_device(&url);
-  Ok(())
+pub async fn set_device_auto_connect(host: State<'_, Arc<Host>>, url: String, enabled: bool) -> Answer<()> {
+  ops::set_device_auto_connect(&host, url, enabled).await
 }
 
 #[tauri::command]
-pub async fn selected_device(shell: State<'_, Arc<Shell>>) -> Answer<Option<String>> {
-  Ok(shell.peer())
+pub async fn forget_known_device(host: State<'_, Arc<Host>>, url: String) -> Answer<()> {
+  ops::forget_known_device(&host, url).await
 }
 
 #[tauri::command]
-pub async fn select_device(shell: State<'_, Arc<Shell>>, device_id: Option<String>) -> Answer<()> {
-  shell.select(device_id);
-  Ok(())
+pub async fn selected_device(host: State<'_, Arc<Host>>) -> Answer<Option<String>> {
+  ops::selected_device(&host).await
 }
 
 #[tauri::command]
-pub async fn set_provider_priority(shell: State<'_, Arc<Shell>>, ids: Vec<String>) -> Answer<()> {
-  shell.session().set_provider_priority(ids).await;
-  Ok(())
+pub async fn select_device(host: State<'_, Arc<Host>>, device_id: Option<String>) -> Answer<()> {
+  ops::select_device(&host, device_id).await
 }
 
 #[tauri::command]
-pub async fn connect_provider(shell: State<'_, Arc<Shell>>, id: String) -> Answer<()> {
-  Ok(shell.session().connect_provider(id).await?)
+pub async fn set_provider_priority(host: State<'_, Arc<Host>>, ids: Vec<String>) -> Answer<()> {
+  ops::set_provider_priority(&host, ids).await
 }
 
 #[tauri::command]
-pub async fn disconnect_provider(shell: State<'_, Arc<Shell>>, id: String) -> Answer<()> {
-  shell.session().disconnect_provider(id).await;
-  Ok(())
+pub async fn connect_provider(host: State<'_, Arc<Host>>, id: String) -> Answer<()> {
+  ops::connect_provider(&host, id).await
 }
 
 #[tauri::command]
-pub async fn cancel_provider_auth(shell: State<'_, Arc<Shell>>, id: String) -> Answer<()> {
-  shell.session().cancel_auth(id).await;
-  Ok(())
+pub async fn disconnect_provider(host: State<'_, Arc<Host>>, id: String) -> Answer<()> {
+  ops::disconnect_provider(&host, id).await
 }
 
 #[tauri::command]
-pub async fn complete_provider_auth(shell: State<'_, Arc<Shell>>, id: String, tokens: ProviderTokens) -> Answer<()> {
-  Ok(shell.session().complete_provider_auth(id, tokens).await?)
+pub async fn cancel_provider_auth(host: State<'_, Arc<Host>>, id: String) -> Answer<()> {
+  ops::cancel_provider_auth(&host, id).await
 }
 
 #[tauri::command]
-pub async fn set_capability_flags(shell: State<'_, Arc<Shell>>, flags: CapabilityFlags) -> Answer<()> {
-  shell.set_capability_flags(flags).await;
-  shell.announce(Hint::bare(hints::SESSION));
-  Ok(())
+pub async fn complete_provider_auth(host: State<'_, Arc<Host>>, id: String, tokens: ProviderTokens) -> Answer<()> {
+  ops::complete_provider_auth(&host, id, tokens).await
 }
 
 #[tauri::command]
-pub async fn set_device_auto_resume(shell: State<'_, Arc<Shell>>, enabled: bool) -> Answer<()> {
-  let device_id = peer(&shell)?;
-  shell.session().set_device_auto_resume(device_id.clone(), enabled).await;
-  shell.announce(Hint::about(hints::DEVICE_META, device_id));
-  Ok(())
+pub async fn set_capability_flags(host: State<'_, Arc<Host>>, flags: CapabilityFlags) -> Answer<()> {
+  ops::set_capability_flags(&host, flags).await
 }
 
 #[tauri::command]
-pub async fn set_device_log_streaming(shell: State<'_, Arc<Shell>>, enabled: bool) -> Answer<()> {
-  shell.set_log_streaming(enabled).await;
-  shell.announce(Hint::bare(hints::LOGS));
-  Ok(())
+pub async fn set_device_auto_resume(host: State<'_, Arc<Host>>, enabled: bool) -> Answer<()> {
+  ops::set_device_auto_resume(&host, enabled).await
 }
 
 #[tauri::command]
-pub async fn set_debug_logging(verbosity: State<'_, Arc<Verbosity>>, enabled: bool) -> Answer<()> {
-  verbosity.set(enabled);
-  tracing::info!(enabled, "the host log verbosity changed");
-  Ok(())
+pub async fn set_device_log_streaming(host: State<'_, Arc<Host>>, enabled: bool) -> Answer<()> {
+  ops::set_device_log_streaming(&host, enabled).await
 }
 
 #[tauri::command]
-pub async fn set_device_nickname(shell: State<'_, Arc<Shell>>, nickname: String) -> Answer<()> {
-  Ok(shell.session().device_set_nickname(peer(&shell)?, nickname).await?)
+pub async fn set_debug_logging(host: State<'_, Arc<Host>>, enabled: bool) -> Answer<()> {
+  ops::set_debug_logging(&host, enabled).await
 }
 
 #[tauri::command]
-pub async fn switch_webapp(shell: State<'_, Arc<Shell>>, id: String) -> Answer<()> {
-  Ok(shell.session().switch_webapp(peer(&shell)?, id).await?)
+pub async fn set_device_nickname(host: State<'_, Arc<Host>>, nickname: String) -> Answer<()> {
+  ops::set_device_nickname(&host, nickname).await
 }
 
 #[tauri::command]
-pub async fn uninstall_webapp(shell: State<'_, Arc<Shell>>, id: String) -> Answer<()> {
-  Ok(shell.session().uninstall_webapp(peer(&shell)?, id).await?)
+pub async fn switch_webapp(host: State<'_, Arc<Host>>, id: String) -> Answer<()> {
+  ops::switch_webapp(&host, id).await
+}
+
+#[tauri::command]
+pub async fn uninstall_webapp(host: State<'_, Arc<Host>>, id: String) -> Answer<()> {
+  ops::uninstall_webapp(&host, id).await
 }
 
 #[tauri::command]
 pub async fn set_webapp_slot(
-  shell: State<'_, Arc<Shell>>,
+  host: State<'_, Arc<Host>>,
   slot: WebappSlot,
   id: Option<String>,
 ) -> Answer<WebappSlots> {
-  Ok(shell.session().set_webapp_slot(peer(&shell)?, slot, id).await?)
+  ops::set_webapp_slot(&host, slot, id).await
 }
 
 #[tauri::command]
 pub async fn set_webapp_config_field(
-  shell: State<'_, Arc<Shell>>,
+  host: State<'_, Arc<Host>>,
   id: String,
   key: String,
   value: String,
 ) -> Answer<()> {
-  Ok(
-    shell
-      .session()
-      .set_webapp_config_field(peer(&shell)?, id, key, value)
-      .await?,
-  )
+  ops::set_webapp_config_field(&host, id, key, value).await
 }
 
 #[tauri::command]
-pub async fn delete_webapp_config_field(shell: State<'_, Arc<Shell>>, id: String, key: String) -> Answer<()> {
-  Ok(
-    shell
-      .session()
-      .delete_webapp_config_field(peer(&shell)?, id, key)
-      .await?,
-  )
+pub async fn delete_webapp_config_field(host: State<'_, Arc<Host>>, id: String, key: String) -> Answer<()> {
+  ops::delete_webapp_config_field(&host, id, key).await
 }
 
 #[tauri::command]
-pub async fn set_webapp_doc(shell: State<'_, Arc<Shell>>, id: String, key: String, value: String) -> Answer<()> {
-  Ok(shell.session().set_webapp_doc(peer(&shell)?, id, key, value).await?)
+pub async fn set_webapp_doc(host: State<'_, Arc<Host>>, id: String, key: String, value: String) -> Answer<()> {
+  ops::set_webapp_doc(&host, id, key, value).await
 }
 
 #[tauri::command]
-pub async fn delete_webapp_doc(shell: State<'_, Arc<Shell>>, id: String, key: String) -> Answer<()> {
-  Ok(shell.session().delete_webapp_doc(peer(&shell)?, id, key).await?)
+pub async fn delete_webapp_doc(host: State<'_, Arc<Host>>, id: String, key: String) -> Answer<()> {
+  ops::delete_webapp_doc(&host, id, key).await
 }
 
 #[tauri::command]
-pub async fn set_ota_poll_config(shell: State<'_, Arc<Shell>>, config: Option<OtaPollConfig>) -> Answer<()> {
-  shell.session().set_ota_poll_config(config).await;
-  shell.announce(Hint::bare(hints::OTA_POLL));
-  Ok(())
+pub async fn set_ota_poll_config(host: State<'_, Arc<Host>>, config: Option<OtaPollConfig>) -> Answer<()> {
+  ops::set_ota_poll_config(&host, config).await
 }
 
 #[tauri::command]
 pub async fn apply_ota_update(
-  shell: State<'_, Arc<Shell>>,
+  host: State<'_, Arc<Host>>,
   channel: String,
   version: String,
   root_url: String,
 ) -> Answer<()> {
-  shell
-    .session()
-    .apply_ota_update(peer(&shell)?, channel, version, root_url)
-    .await;
-  Ok(())
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize)]
-#[serde(tag = "kind", rename_all = "camelCase")]
-pub enum OtaOutcome {
-  Completed,
-  Failed { reason: String },
-  Interrupted,
-}
-
-impl From<OtaPhaseSnapshot> for OtaOutcome {
-  fn from(phase: OtaPhaseSnapshot) -> Self {
-    match phase {
-      OtaPhaseSnapshot::Completed => Self::Completed,
-      OtaPhaseSnapshot::Failed { reason } => Self::Failed { reason },
-      _ => Self::Interrupted,
-    }
-  }
+  ops::apply_ota_update(&host, channel, version, root_url).await
 }
 
 #[tauri::command]
-pub async fn ota_push_daemon(shell: State<'_, Arc<Shell>>, artifact: PathBuf) -> Answer<OtaOutcome> {
-  let device_id = peer(&shell)?;
-  Ok(shell.ota().push_daemon(&device_id, spool(artifact)?, None).await.into())
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize)]
-#[serde(tag = "kind", rename_all = "camelCase")]
-pub enum InstallOutcome {
-  Installed { id: String },
-  Failed { reason: String },
+pub async fn ota_push_daemon(host: State<'_, Arc<Host>>, artifact: PathBuf) -> Answer<OtaOutcome> {
+  ops::ota_push_daemon(&host, artifact).await
 }
 
 #[tauri::command]
 pub async fn ota_install_webapp(
-  shell: State<'_, Arc<Shell>>,
+  host: State<'_, Arc<Host>>,
   bundle: PathBuf,
   provenance: Option<String>,
 ) -> Answer<InstallOutcome> {
-  let device_id = peer(&shell)?;
-  let bundle = spool(bundle)?;
-  let outcome = shell
-    .ota()
-    .install_webapp(&device_id, bundle, provenance.as_deref())
-    .await;
-  Ok(match outcome {
-    WebappInstallResult::Installed(info) => InstallOutcome::Installed {
-      id: info.id.to_string(),
-    },
-    WebappInstallResult::Failed { reason } => InstallOutcome::Failed { reason },
-  })
+  ops::ota_install_webapp(&host, bundle, provenance).await
 }
 
 #[tauri::command]
 pub async fn install_webapp_from_url(
-  shell: State<'_, Arc<Shell>>,
+  host: State<'_, Arc<Host>>,
   url: String,
   expected: Option<ArtifactDigest>,
   provenance: Option<String>,
 ) -> Answer<WebappInfo> {
-  Ok(
-    shell
-      .session()
-      .install_webapp_from_url(peer(&shell)?, url, expected, provenance)
-      .await?,
-  )
+  ops::install_webapp_from_url(&host, url, expected, provenance).await
 }
 
 #[tauri::command]
-pub async fn ota_check_now(shell: State<'_, Arc<Shell>>, root_url: String) -> Answer<()> {
-  shell.ota().check_now(&root_url).await;
-  Ok(())
+pub async fn ota_check_now(host: State<'_, Arc<Host>>, root_url: String) -> Answer<()> {
+  ops::ota_check_now(&host, root_url).await
 }
 
 #[tauri::command]
-pub async fn ota_dismiss_run(shell: State<'_, Arc<Shell>>) -> Answer<()> {
-  let device_id = peer(&shell)?;
-  shell.ota().dismiss_run(&device_id).await;
-  Ok(())
+pub async fn ota_dismiss_run(host: State<'_, Arc<Host>>) -> Answer<()> {
+  ops::ota_dismiss_run(&host).await
 }
 
 #[tauri::command]
@@ -550,13 +375,4 @@ pub fn restart<R: Runtime>(app: AppHandle<R>) {
 #[tauri::command]
 pub fn quit<R: Runtime>(app: AppHandle<R>) {
   crate::process::leave(&app)
-}
-
-fn spool(path: PathBuf) -> Answer<Arc<FileSource>> {
-  let source = Arc::new(FileSource::open(&path));
-  let mut probe = [0u8; 1];
-  source
-    .read_at(0, &mut probe)
-    .map_err(|reason| CommandError::Artifact(format!("{}: {reason}", path.display())))?;
-  Ok(source)
 }

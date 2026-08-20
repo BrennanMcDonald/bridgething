@@ -1,0 +1,36 @@
+@keyframes bridgething-sweep {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(300%);
+  }
+}
+
+@keyframes bridgething-enter {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .route-enter {
+    animation: bridgething-enter 120ms ease-out;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-rule-strong);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-edge);
+}

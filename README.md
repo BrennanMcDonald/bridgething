@@ -40,7 +40,10 @@ pairing, settings, and new apps live.
 | `crates/delivery`, `crates/companion`    | The shared phone-side core in Rust, plus its wasm/napi bindings   |
 | `packages/companion`                     | Swift + Kotlin platform shells over that core                     |
 | `packages/{client-ts,browser}`           | The webapp TS SDK, and the delivery core for browsers             |
-| `desktop/`                               | Tauri shell over the shared core                                  |
+| `crates/host-shell`                      | The host shell both host surfaces run on: state, backends, ops    |
+| `packages/console`                       | The console screens both host surfaces show                       |
+| `desktop/`                               | Tauri tray shell over the shared core                             |
+| `headless/`                              | The same host with no desktop: a daemon plus the console over http |
 | `packages/webapps/builtin`               | Webapps delivered with the daemon (hub, browser)                  |
 | `packages/webapps/catalog`               | Webapps published to the app catalog                              |
 | `packages/create-bridgething`            | `bun create bridgething`                                          |

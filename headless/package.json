@@ -1,0 +1,24 @@
+{
+  "name": "@bridgething/headless-frontend",
+  "type": "module",
+  "private": true,
+  "description": "the console the headless host serves over http",
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@bridgething/companion-types": "workspace:*",
+    "@bridgething/console": "workspace:*",
+    "@bridgething/ui": "workspace:*",
+    "preact": "^10.29.7"
+  },
+  "devDependencies": {
+    "@preact/preset-vite": "^2.10.6",
+    "@tailwindcss/vite": "^4.3.3",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^6.0.3",
+    "vite": "^8.2.1"
+  }
+}

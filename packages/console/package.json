@@ -1,0 +1,31 @@
+{
+  "name": "@bridgething/console",
+  "type": "module",
+  "private": true,
+  "description": "the host console: screens shared by the desktop shell and the headless web ui",
+  "exports": {
+    ".": "./src/index.ts",
+    "./console.css": "./src/console.css"
+  },
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "preact": "^10.29.7",
+    "tailwindcss": "^4.3.3"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.14",
+    "preact": "^10.29.7",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^6.0.3"
+  },
+  "dependencies": {
+    "@bridgething/catalog": "workspace:*",
+    "@bridgething/companion-types": "workspace:*",
+    "@bridgething/ui": "workspace:*",
+    "@preact/signals": "^2.10.0",
+    "preact-iso": "^2.12.1"
+  }
+}
