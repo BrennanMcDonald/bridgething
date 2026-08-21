@@ -4,6 +4,12 @@ target-cross
 node_modules
 **/node_modules
 .git
+# the console image builds a bun workspace, and bun refuses to install when a
+# workspace member named in the root package.json is not there
 mobile
+!mobile/package.json
+docs
+dist
+**/dist
 .turbo
 **/.turbo

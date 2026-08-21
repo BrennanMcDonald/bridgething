@@ -11,6 +11,7 @@ headless/
   src/            the console entrypoint: http session, browser host adapter
   systemd/        the unit template an install renders
   scripts/        install.sh, which goes from a bare machine to a running service
+  Dockerfile      the same thing as an image, cross-compiled on the build host
 ```
 
 Both halves of the console are shared with the desktop app and neither is
@@ -116,6 +117,39 @@ bun run build --filter=@bridgething/headless-frontend
 headless/scripts/install.sh --no-deps --no-build \
   --binary ~/bridgething-headless --web ~/dist
 ```
+
+## As a container
+
+The alternative to putting a toolchain on the pi at all. Both build stages run
+on the machine doing the building and cross-compile to the target, so this is
+native-speed compilation, not an emulated pi compiling for itself. The runtime
+image brings its own glibc, so nothing has to match what the pi runs.
+
+```sh
+just headless-image                        # linux/arm64 by default
+just headless-ship pi@raspberrypi.local    # docker save | ssh | docker load
+```
+
+Then on the pi:
+
+```sh
+docker compose -f headless/docker-compose.yml up -d
+docker logs bridgething-console      # the url, with its token
+```
+
+**It has to be on the host's network.** The console answers mdns for itself and
+browses mdns to find Car Things, and neither crosses a bridge nat. The compose
+file sets `network_mode: host`; a bare `docker run` needs `--network host`, and
+then `-p` does nothing because the bind address is the port.
+
+State lives in the `console-state` volume, so the token survives a new image.
+To read it back:
+
+```sh
+docker exec bridgething-console cat /var/lib/bridgething-console/config/console-token
+```
+
+Upgrading is the same three commands: build, ship, `up -d`.
 
 ## Flags
 

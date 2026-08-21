@@ -1,0 +1,23 @@
+services:
+  console:
+    image: bridgething-console:latest
+    container_name: bridgething-console
+    restart: unless-stopped
+
+    # The console has to share the host's network, not a bridge: it answers mdns
+    # for itself and browses mdns to find Car Things, and neither crosses a nat.
+    # This also means `ports:` does nothing here - the bind address is the port.
+    network_mode: host
+
+    volumes:
+      - console-state:/var/lib/bridgething-console
+
+    # every flag has an environment variable; these are the ones worth changing
+    environment:
+      # BRIDGETHING_CONSOLE_BIND: 0.0.0.0:8899
+      # BRIDGETHING_CONSOLE_TOKEN: pick-your-own-url-safe-token
+      # BRIDGETHING_GATEWAY_URL: ws://bridgething.local:8892/
+      RUST_LOG: warn,bridgething_headless=info,bridgething_host_shell=info,bridgething_companion=info
+
+volumes:
+  console-state:

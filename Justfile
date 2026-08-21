@@ -195,8 +195,7 @@ headless-dev:
 headless-serve *args:
   cargo run -p bridgething-headless -- {{args}}
 
-# Binary plus console assets, ready for scripts/install.sh. Through turbo, so the
-# packages the console imports are built before it.
+# Binary plus console assets, ready for scripts/install.sh. Through turbo, so its packages build first.
 headless-build:
   cargo build --release -p bridgething-headless
   bun run build --filter=@bridgething/headless-frontend
@@ -204,6 +203,14 @@ headless-build:
 # Toolchains, build, systemd unit, started service. `just headless-install -y` to skip the prompts.
 headless-install *args:
   headless/scripts/install.sh {{args}}
+
+# An image for a pi, cross-compiled here rather than emulated. Needs buildx.
+headless-image tag="bridgething-console:latest" platform="linux/arm64":
+  docker buildx build --platform {{platform}} -f headless/Dockerfile -t {{tag}} --load .
+
+# Ship that image to a box over ssh, no registry in the middle
+headless-ship host tag="bridgething-console:latest":
+  docker save {{tag}} | gzip | ssh {{host}} 'gunzip | docker load'
 
 # JVM suites for every gradle subproject
 test-kotlin:
